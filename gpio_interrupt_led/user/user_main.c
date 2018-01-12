@@ -1,7 +1,7 @@
 /*
  * ESPRSSIF MIT License
  *
- * Copyright (c) 2015 <ESPRESSIF SYSTEMS (SHANGHAI) PTE LTD>
+ * Copyright (c) 204 <ESPRESSIF SYSTEMS (SHANGHAI) PTE LTD>
  *
  * Permission is hereby granted for use on ESPRESSIF SYSTEMS ESP8266 only, in which case,
  * it is free of charge, to any person obtaining a copy of this software and associated
@@ -92,10 +92,10 @@ void led_toggle(void){
 	uint32_t bit;
 	bit = GPIO_INPUT_GET(0);
 	GPIO_OUTPUT(GPIO_Pin_0, bit ^ 0x0000001 );
-	if ((bit & 0x0000001) == 0x01){
+	if ((bit ^ 0x0000001) == 0x01){
 		printf("led on \n");
 	}else{
-		printf("led of \n");
+		printf("led off \n");
 	}
 }
 
@@ -118,18 +118,19 @@ void key_interrupt(void){
 
 	GPIO_REG_WRITE( GPIO_STATUS_W1TC_ADDRESS , gpio_status );
 
-	if( gpio_status & (BIT(15)) )
+	if( gpio_status & (BIT(4)) )
 	{
+		//printf("key_interrupt \n");
 		xTaskResumeFromISR( key_handler_task_handle );
 	}
 }
 
 void key_init(void){
 	GPIO_ConfigTypeDef gpio_in_cfg;    //Define GPIO Init Structure
-	gpio_in_cfg.GPIO_IntrType = GPIO_PIN_INTR_POSEDGE;    //
+	gpio_in_cfg.GPIO_IntrType = GPIO_PIN_INTR_ANYEDGE;    //
 	gpio_in_cfg.GPIO_Mode = GPIO_Mode_Input;    //Input mode
 	gpio_in_cfg.GPIO_Pullup = GPIO_PullUp_DIS;
-	gpio_in_cfg.GPIO_Pin = GPIO_Pin_15;    // Enable GPIO
+	gpio_in_cfg.GPIO_Pin = GPIO_Pin_4;    // Enable GPIO
 	gpio_config(&gpio_in_cfg);    //Initialization function
 
 	gpio_intr_handler_register(key_interrupt, NULL); // Register the interrupt function
@@ -160,7 +161,7 @@ void key_handler_task(void  *pvParameters){
 				uint32_t gpio_value;
 
 				gpio_value = gpio_input_get( );
-				if( ( gpio_value & BIT(15) ) == BIT(0) )
+				if( ( gpio_value & BIT(4) ) == BIT(1) )
 				{
 					break;
 				}
@@ -168,8 +169,10 @@ void key_handler_task(void  *pvParameters){
 
 			if( i == 10 )
 			{
-				if (GPIO_INPUT_GET(15) & 0X0000001){
+				if (GPIO_INPUT_GET(4) & 0X01){
 					led_toggle();
+				}else{
+					printf("button down \n");
 				}
 
 			}
