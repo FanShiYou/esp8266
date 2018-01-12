@@ -112,21 +112,16 @@ void led_toggle_task(void  *pvParameters)
 
 void key_interrupt(void){
 
-    uint32_t bit;
-	_xt_isr_mask(1<<ETS_GPIO_INUM);    //disable interrupt
+	uint32 gpio_status;
 
-	bit = GPIO_REG_READ( GPIO_STATUS_ADDRESS );
-	printf("keyinterrupt :%s \n", system_get_sdk_version());
-	if ( bit & BIT(15) ){
-		led_toggle();
+	gpio_status = GPIO_REG_READ( GPIO_STATUS_ADDRESS );
 
-		printf("keyinterrupt :%s \n", 15);
+	GPIO_REG_WRITE( GPIO_STATUS_W1TC_ADDRESS , gpio_status );
 
-		//vTaskDelay( 500 / portTICK_RATE_MS );
+	if( gpio_status & (BIT(15)) )
+	{
+		xTaskResumeFromISR( key_handler_task_handle );
 	}
-
-	GPIO_REG_WRITE( GPIO_STATUS_W1TC_ADDRESS, bit ); //clear interrupt mask
-	_xt_isr_unmask(1 << ETS_GPIO_INUM); //Enable the GPIO interrupt
 }
 
 void key_init(void){
@@ -137,24 +132,51 @@ void key_init(void){
 	gpio_in_cfg.GPIO_Pin = GPIO_Pin_15;    // Enable GPIO
 	gpio_config(&gpio_in_cfg);    //Initialization function
 
-	//gpio_intr_handler_register(key_interrupt, NULL); // Register the interrupt function
-	//_xt_isr_unmask(1 << ETS_GPIO_INUM);    //Enable the GPIO interrupt
+	gpio_intr_handler_register(key_interrupt, NULL); // Register the interrupt function
+	_xt_isr_unmask(1 << ETS_GPIO_INUM);    //Enable the GPIO interrupt
 
 }
 
 void key_handler_task(void  *pvParameters){
+	uint32_t TickCountPre = 0 , TickCountCur = 0;
+
 	key_init();
-	for(;;){
-		uint32_t bit;
-		if (GPIO_INPUT_GET(15) == 0x01){
-			vTaskDelay(20 / portTICK_RATE_MS);
-			if( GPIO_INPUT_GET(15) == 0x01){
-				led_toggle();
-				while( GPIO_INPUT_GET(15) == 0x01 );
+
+	for( ;; )
+	{
+		vTaskSuspend( NULL );
+
+		TickCountPre = TickCountCur;
+
+		TickCountCur = xTaskGetTickCount( );
+		if( TickCountCur - TickCountPre > 7 )
+		{
+			uint8_t i;
+
+			for( i = 0; i < 10 ; i ++ )
+			{
+				vTaskDelay( 30 / portTICK_RATE_MS );
+
+				uint32_t gpio_value;
+
+				gpio_value = gpio_input_get( );
+				if( ( gpio_value & BIT(15) ) == BIT(0) )
+				{
+					break;
+				}
 			}
+
+			if( i == 10 )
+			{
+				if (GPIO_INPUT_GET(15) & 0X0000001){
+					led_toggle();
+				}
+
+			}
+
 		}
-		vTaskDelay(100 / portTICK_RATE_MS);
 	}
+
 	vTaskDelete(NULL);
 }
 
@@ -174,6 +196,6 @@ void user_init(void)
     //key_init();
 
     //xTaskCreate(led_toggle_task, "led_toggle_task", 256, NULL,1, NULL);
-    xTaskCreate(key_handler_task, "key_handler_task", 256, NULL, 3, NULL);
+    xTaskCreate(key_handler_task, "key_handler_task", 256, NULL, 3, &key_handler_task_handle);
 }
 
